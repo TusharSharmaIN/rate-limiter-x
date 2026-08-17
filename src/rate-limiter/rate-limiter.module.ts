@@ -4,6 +4,7 @@ import { RateLimiterService } from './rate-limiter.service';
 import { StrategyFactory } from './strategy.factory';
 import { TokenBucketStrategy } from './strategies/token-bucket/token-bucket.strategy';
 import { FixedWindowStrategy } from './strategies/fixed-window/fixed-window.strategy';
+import { SlidingWindowLogStrategy } from './strategies/sliding-window-log/sliding-window-log.strategy';
 
 @Module({
   controllers: [RateLimiterController],
@@ -12,6 +13,7 @@ import { FixedWindowStrategy } from './strategies/fixed-window/fixed-window.stra
     StrategyFactory,
     TokenBucketStrategy,
     FixedWindowStrategy,
+    SlidingWindowLogStrategy,
   ],
 })
 export class RateLimiterModule {}

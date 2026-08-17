@@ -4,12 +4,12 @@ import * as path from 'path';
 import { RedisService } from '../../../redis/redis.service';
 import { RateLimiterStrategy } from '../../interfaces/rate-limiter-strategy.interface';
 import { LimitResult } from '../../interfaces/limit-result.interface';
-import { TokenBucketConfig } from './token-bucket.config';
-import { FailOpenCounterService } from 'src/observability/fail-open-counter.service';
+import { SlidingWindowLogConfig } from './sliding-window-log.config';
+import { FailOpenCounterService } from '../../../observability/fail-open-counter.service';
 
 @Injectable()
-export class TokenBucketStrategy implements RateLimiterStrategy<TokenBucketConfig> {
-  private readonly logger = new Logger(TokenBucketStrategy.name);
+export class SlidingWindowLogStrategy implements RateLimiterStrategy<SlidingWindowLogConfig> {
+  private readonly logger = new Logger(SlidingWindowLogStrategy.name);
   private readonly script: string;
 
   constructor(
@@ -17,19 +17,18 @@ export class TokenBucketStrategy implements RateLimiterStrategy<TokenBucketConfi
     private readonly failOpenCounter: FailOpenCounterService,
   ) {
     this.script = fs.readFileSync(
-      path.join(__dirname, 'token-bucket.lua'),
+      path.join(__dirname, 'sliding-window-log.lua'),
       'utf-8',
     );
   }
 
   async checkLimit(
     key: string,
-    config: TokenBucketConfig,
+    config: SlidingWindowLogConfig,
   ): Promise<LimitResult> {
-    const bucketKey = `bucket:${key}`;
+    const logKey = `slidinglog:${key}`;
     const now = Date.now();
 
-    // Fail-open check: if Redis is known-unhealthy, don't even attempt the call
     if (!this.redis.isHealthy()) {
       this.failOpenCounter.increment();
       this.logger.warn(
@@ -41,17 +40,11 @@ export class TokenBucketStrategy implements RateLimiterStrategy<TokenBucketConfi
     try {
       const result = await this.redis.evalScript<[number, number, number]>(
         this.script,
-        [bucketKey],
-        [config.capacity, config.refillRatePerSec, now],
+        [logKey],
+        [config.capacity, config.windowSizeSec, now],
       );
-
       const [allowed, remaining, retryAfterMs] = result;
-      return {
-        allowed: allowed === 1,
-        remaining,
-        retryAfterMs,
-        checked: true,
-      };
+      return { allowed: allowed === 1, remaining, retryAfterMs, checked: true };
     } catch (err) {
       this.failOpenCounter.increment();
       this.logger.error(`Redis EVAL failed for key=${key}: ${err.message}`);

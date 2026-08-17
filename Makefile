@@ -50,3 +50,7 @@ test-load:
 			-d '{"key": "concurrency-test"}' \
 			localhost:50051 ratelimiter.RateLimiter/CheckLimit & \
 	done; wait
+
+## Check service health
+health:
+	curl -s localhost:3000/health | jq

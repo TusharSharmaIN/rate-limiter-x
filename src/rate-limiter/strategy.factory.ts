@@ -2,9 +2,11 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TokenBucketStrategy } from './strategies/token-bucket/token-bucket.strategy';
 import { FixedWindowStrategy } from './strategies/fixed-window/fixed-window.strategy';
+import { SlidingWindowLogStrategy } from './strategies/sliding-window-log/sliding-window-log.strategy';
 import { LimitResult } from './interfaces/limit-result.interface';
 import { TokenBucketConfig } from './strategies/token-bucket/token-bucket.config';
 import { FixedWindowConfig } from './strategies/fixed-window/fixed-window.config';
+import { SlidingWindowLogConfig } from './strategies/sliding-window-log/sliding-window-log.config';
 
 @Injectable()
 export class StrategyFactory {
@@ -14,6 +16,7 @@ export class StrategyFactory {
     private readonly config: ConfigService,
     private readonly tokenBucketStrategy: TokenBucketStrategy,
     private readonly fixedWindowStrategy: FixedWindowStrategy,
+    private readonly slidingWindowLogStrategy: SlidingWindowLogStrategy,
   ) {
     this.strategyName = this.config.get<string>(
       'rateLimiter.strategy',
@@ -43,6 +46,17 @@ export class StrategyFactory {
           ),
         };
         return this.fixedWindowStrategy.checkLimit(key, cfg);
+      }
+
+      case 'sliding_window_log': {
+        const cfg: SlidingWindowLogConfig = {
+          capacity: this.config.get<number>('rateLimiter.capacity', 10),
+          windowSizeSec: this.config.get<number>(
+            'rateLimiter.windowSizeSec',
+            60,
+          ),
+        };
+        return this.slidingWindowLogStrategy.checkLimit(key, cfg);
       }
 
       default:

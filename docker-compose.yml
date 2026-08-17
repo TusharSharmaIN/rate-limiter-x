@@ -19,12 +19,14 @@ services:
     container_name: rate-limiter-service
     ports:
       - '50051:50051'
+      - '3000:3000'
     environment:
-      REDIS_HOST: redis # service name = hostname inside docker network
+      REDIS_HOST: redis # always 'redis' in Docker — NOT from .env, see note below
       REDIS_PORT: 6379
-      RATE_LIMIT_STRATEGY: token_bucket
-      RATE_LIMIT_CAPACITY: 10
-      RATE_LIMIT_REFILL_PER_SEC: 1
+      RATE_LIMIT_STRATEGY: ${RATE_LIMIT_STRATEGY}
+      RATE_LIMIT_CAPACITY: ${RATE_LIMIT_CAPACITY}
+      RATE_LIMIT_REFILL_PER_SEC: ${RATE_LIMIT_REFILL_PER_SEC}
+      RATE_LIMIT_WINDOW_SIZE_SEC: ${RATE_LIMIT_WINDOW_SIZE_SEC}
     depends_on:
       redis:
         condition: service_healthy
