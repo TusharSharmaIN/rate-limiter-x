@@ -7,6 +7,10 @@ import { LimitResult } from './interfaces/limit-result.interface';
 import { TokenBucketConfig } from './strategies/token-bucket/token-bucket.config';
 import { FixedWindowConfig } from './strategies/fixed-window/fixed-window.config';
 import { SlidingWindowLogConfig } from './strategies/sliding-window-log/sliding-window-log.config';
+import { SlidingWindowCounterConfig } from './strategies/sliding-window-counter/sliding-window-counter.config';
+import { SlidingWindowCounterStrategy } from './strategies/sliding-window-counter/sliding-window-counter.strategy';
+import { LeakyBucketConfig } from './strategies/leaky-bucket/leaky-bucket.config';
+import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-strategy';
 
 @Injectable()
 export class StrategyFactory {
@@ -17,6 +21,8 @@ export class StrategyFactory {
     private readonly tokenBucketStrategy: TokenBucketStrategy,
     private readonly fixedWindowStrategy: FixedWindowStrategy,
     private readonly slidingWindowLogStrategy: SlidingWindowLogStrategy,
+    private readonly slidingWindowCounterStrategy: SlidingWindowCounterStrategy,
+    private readonly leakyBucketStrategy: LeakyBucketStrategy,
   ) {
     this.strategyName = this.config.get<string>(
       'rateLimiter.strategy',
@@ -57,6 +63,30 @@ export class StrategyFactory {
           ),
         };
         return this.slidingWindowLogStrategy.checkLimit(key, cfg);
+      }
+
+      case 'sliding_window_counter': {
+        const cfg: SlidingWindowCounterConfig = {
+          capacity: this.config.get<number>('rateLimiter.capacity', 10),
+          windowSizeSec: this.config.get<number>(
+            'rateLimiter.windowSizeSec',
+            60,
+          ),
+        };
+
+        return this.slidingWindowCounterStrategy.checkLimit(key, cfg);
+      }
+
+      case 'leaky_bucket': {
+        const cfg: LeakyBucketConfig = {
+          capacity: this.config.get<number>('rateLimiter.capacity', 10),
+          leakRatePerSec: this.config.get<number>(
+            'rateLimiter.leakRatePerSec',
+            1,
+          ),
+        };
+
+        return this.leakyBucketStrategy.checkLimit(key, cfg);
       }
 
       default:
