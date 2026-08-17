@@ -32,10 +32,22 @@ export class TokenBucketStrategy implements RateLimiterStrategy<TokenBucketConfi
     // Fail-open check: if Redis is known-unhealthy, don't even attempt the call
     if (!this.redis.isHealthy()) {
       this.failOpenCounter.increment();
+      const willFailOpen = this.redis.shouldFailOpen();
+
       this.logger.warn(
-        JSON.stringify({ event: 'fail_open', reason: 'redis_unhealthy', key }),
+        JSON.stringify({
+          event: 'fail_open',
+          reason: 'redis_unhealthy',
+          key,
+          action: willFailOpen ? 'allow' : 'deny',
+        }),
       );
-      return { allowed: true, remaining: -1, retryAfterMs: 0, checked: false };
+      return {
+        allowed: willFailOpen,
+        remaining: -1,
+        retryAfterMs: 0,
+        checked: false,
+      };
     }
 
     try {
@@ -54,8 +66,14 @@ export class TokenBucketStrategy implements RateLimiterStrategy<TokenBucketConfi
       };
     } catch (err) {
       this.failOpenCounter.increment();
+      const willFailOpen = this.redis.shouldFailOpen();
       this.logger.error(`Redis EVAL failed for key=${key}: ${err.message}`);
-      return { allowed: true, remaining: -1, retryAfterMs: 0, checked: false };
+      return {
+        allowed: willFailOpen,
+        remaining: -1,
+        retryAfterMs: 0,
+        checked: false,
+      };
     }
   }
 }

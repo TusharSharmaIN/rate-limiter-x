@@ -23,10 +23,16 @@ services:
     environment:
       REDIS_HOST: redis # always 'redis' in Docker — NOT from .env, see note below
       REDIS_PORT: 6379
+      GRPC_PORT: ${GRPC_PORT}
+      HTTP_PORT: ${HTTP_PORT}
       RATE_LIMIT_STRATEGY: ${RATE_LIMIT_STRATEGY}
       RATE_LIMIT_CAPACITY: ${RATE_LIMIT_CAPACITY}
       RATE_LIMIT_REFILL_PER_SEC: ${RATE_LIMIT_REFILL_PER_SEC}
       RATE_LIMIT_WINDOW_SIZE_SEC: ${RATE_LIMIT_WINDOW_SIZE_SEC}
+      RATE_LIMIT_LEAK_RATE_PER_SEC: ${RATE_LIMIT_LEAK_RATE_PER_SEC}
+      LOG_LEVEL: ${LOG_LEVEL}
+      REDIS_RETRY_MAX_DELAY_MS: ${REDIS_RETRY_MAX_DELAY_MS}
+      FAIL_OPEN_ENABLED: ${FAIL_OPEN_ENABLED}
     depends_on:
       redis:
         condition: service_healthy

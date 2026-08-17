@@ -1,98 +1,131 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# ⚡ Rate Limiter as a Service
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+A production-shaped, config-switchable rate limiting microservice — built as standalone infrastructure other services call over **gRPC**, not middleware bolted onto one app.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+Implements **all 5 major rate limiting algorithms** behind one interface (Strategy Pattern), each backed by an **atomic Redis Lua script** to eliminate check-then-decrement race conditions under concurrent load.
 
-## Description
+---
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## 🧠 Why this exists
 
-## Project setup
+Most rate limiting is middleware inside a single app. This treats it as **shared infrastructure**: one gRPC endpoint — `CheckLimit(key) → allowed/denied` — that any number of services call in milliseconds.
 
-```bash
-$ npm install
+Built as a systems-design learning project covering atomic concurrency control, the Strategy Pattern, gRPC contracts, and graceful degradation with real observability.
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+flowchart TD
+    A[Calling Service] -->|gRPC: CheckLimit| B[Controller]
+    B --> C[RateLimiterService]
+    C --> D[StrategyFactory]
+    D --> E["Active Strategy<br/>(1 of 5 algorithms)"]
+    E -->|EVAL Lua script| F[(Redis)]
+    G["HTTP :3000 /health"] -.reports.-> H[Redis status + fail-open count]
 ```
 
-## Compile and run the project
+**Key decision:** the algorithm is picked **once, at bootstrap**, from config — not per request. Mirrors how real infra teams roll out algorithm changes: a deliberate redeploy, not runtime branching.
 
-```bash
-# development
-$ npm run start
+---
 
-# watch mode
-$ npm run start:dev
+## 🎛️ The 5 algorithms
 
-# production mode
-$ npm run start:prod
+| Algorithm                  | Redis structure     | Trade-off                                                                      |
+| -------------------------- | ------------------- | ------------------------------------------------------------------------------ |
+| **Token Bucket**           | Hash                | Smooth continuous refill, allows controlled bursts. Industry default.          |
+| **Fixed Window**           | Counter             | Cheapest, but boundary-burst exploit (2× traffic at window edges)              |
+| **Sliding Window Log**     | Sorted Set          | Most precise, no boundary exploit — but memory scales with volume              |
+| **Sliding Window Counter** | 2 weighted counters | Production-realistic middle ground: near-Log accuracy, near-Fixed-Window cost  |
+| **Leaky Bucket**           | Hash                | Smooths _outflow_ to a constant rate — traffic shaping, not just capping input |
+
+Switching algorithms = one `.env` line. Zero changes to Controller/Service.
+
+### Why atomicity matters
+
+Naively (separate `GET` → compute → `SET`), two concurrent requests can both read "9 left," both allow, both write "8 left" — silently exceeding the limit. **Fix:** the entire check-and-update runs as one Redis `EVAL` (Lua) call — atomic by construction. Verified by firing 15–20 concurrent requests at each strategy and confirming allowed count never exceeds capacity.
+
+---
+
+## 🛡️ Fail-open strategy
+
+If Redis is unreachable, the service **fails open** (allows requests) rather than blocking everything — safer default for most products. Not silent:
+
+- Every fail-open event increments a counter, exposed via `GET /health`
+- Every response includes `checked: boolean` — `false` means "allowed without validation," so callers can log/alert on it
+
+```json
+{
+  "status": "degraded",
+  "redis": { "connected": false },
+  "failOpen": { "totalFailOpenEvents": 3, "lastFailOpenAt": 1786970136975 }
+}
 ```
 
-## Run tests
+---
 
-```bash
-# unit tests
-$ npm run test
+## 🧰 Stack
 
-# e2e tests
-$ npm run test:e2e
+NestJS · gRPC · Redis 7 · Docker Compose · 100% local, zero cloud cost
 
-# test coverage
-$ npm run test:cov
+---
+
+## 📁 Structure
+
+```
+src/
+├── rate-limiter/
+│   ├── rate-limiter.controller.ts   # gRPC handler
+│   ├── rate-limiter.service.ts      # thin orchestrator
+│   ├── strategy.factory.ts          # picks + configures active strategy
+│   └── strategies/
+│       ├── token-bucket/            # .strategy.ts + .config.ts + .lua, self-contained
+│       ├── fixed-window/
+│       ├── sliding-window-log/
+│       ├── sliding-window-counter/
+│       └── leaky-bucket/
+├── redis/          # evalScript() + isHealthy()
+├── observability/  # /health + fail-open counter
+└── config/
 ```
 
-## Deployment
+Each strategy folder is self-contained — delete it, the feature's gone cleanly, nothing else breaks.
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+---
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## 🚀 Running it
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+cp .env.example .env   # set RATE_LIMIT_STRATEGY + params
+make up                # docker compose up --build
+make health             # check service + Redis status
+make test-call          # single gRPC call
+make test-load N=20     # 20 concurrent calls — proves atomicity
+make redis-cli          # inspect raw Redis state
+make down
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+Standalone test client (simulates a real consuming service):
 
-## Resources
+```bash
+node client.js my-key 15
+```
 
-Check out a few resources that may come in handy when working with NestJS:
+---
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+## 🔭 What's next
 
-## Support
+- Per-key config overrides (currently global via env)
+- Prometheus `/metrics` endpoint (currently an in-memory counter)
+- Real circuit breaker (`opossum`) instead of a lightweight health flag
+- Unit + integration test suite
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+---
 
-## Stay in touch
+## 📚 What I learned
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- **Atomicity isn't abstract** — watched a naive version over-allow under load, fixed it with Lua, re-verified
+- **Strategy Pattern pays off** — algorithm #5 needed zero Controller/Service changes
+- **Algorithms _feel_ different** — Token Bucket's smooth refill vs Sliding Log's lumpy recovery vs Fixed Window's boundary risk, seen in real numbers, not just read
+- **Two real bugs, diagnosed from scratch**: a DI mistake (`new Service()` bypassing Nest's container → disconnected state) and a Docker config mistake (hardcoded `environment:` silently overriding `.env`)

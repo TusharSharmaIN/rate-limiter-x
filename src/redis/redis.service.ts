@@ -18,7 +18,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       host: this.config.get<string>('redis.host'),
       port: this.config.get<number>('redis.port'),
       lazyConnect: false,
-      retryStrategy: (times) => Math.min(times * 200, 2000),
+      retryStrategy: (times) =>
+        Math.min(
+          times * 200,
+          this.config.get<number>('redis.retryMaxDelayMs', 2000),
+        ),
     });
 
     this.client.on('error', (err) => {
@@ -41,11 +45,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     return this.healthy;
   }
 
-  /**
-   * Runs a Lua script atomically. This is THE critical method —
-   * every strategy's "check and decrement" logic goes through here
-   * as a single EVAL call, never as separate GET+SET calls.
-   */
+  shouldFailOpen(): boolean {
+    return this.config.get<boolean>('rateLimiter.failOpenEnabled', true);
+  }
+
   async evalScript<T = any>(
     script: string,
     keys: string[],

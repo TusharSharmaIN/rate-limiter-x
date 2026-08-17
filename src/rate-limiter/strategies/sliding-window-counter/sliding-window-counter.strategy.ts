@@ -28,13 +28,24 @@ export class SlidingWindowCounterStrategy implements RateLimiterStrategy<Sliding
   ): Promise<LimitResult> {
     const baseKey = `slidingcounter:${key}`;
     const now = Date.now();
+    const willFailOpen = this.redis.shouldFailOpen();
 
     if (!this.redis.isHealthy()) {
       this.failOpenCounter.increment();
       this.logger.warn(
-        JSON.stringify({ event: 'fail_open', reason: 'redis_unhealthy', key }),
+        JSON.stringify({
+          event: 'fail_open',
+          reason: 'redis_unhealthy',
+          key,
+          action: willFailOpen ? 'allow' : 'deny',
+        }),
       );
-      return { allowed: true, remaining: -1, retryAfterMs: 0, checked: false };
+      return {
+        allowed: willFailOpen,
+        remaining: -1,
+        retryAfterMs: 0,
+        checked: false,
+      };
     }
 
     try {
@@ -47,8 +58,14 @@ export class SlidingWindowCounterStrategy implements RateLimiterStrategy<Sliding
       return { allowed: allowed === 1, remaining, retryAfterMs, checked: true };
     } catch (err) {
       this.failOpenCounter.increment();
+      const willFailOpen = this.redis.shouldFailOpen();
       this.logger.error(`Redis EVAL failed for key=${key}: ${err.message}`);
-      return { allowed: true, remaining: -1, retryAfterMs: 0, checked: false };
+      return {
+        allowed: willFailOpen,
+        remaining: -1,
+        retryAfterMs: 0,
+        checked: false,
+      };
     }
   }
 }
