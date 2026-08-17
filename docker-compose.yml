@@ -1,0 +1,33 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: rate-limiter-redis
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rate-limiter-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rate-limiter-service
+    ports:
+      - '50051:50051'
+    environment:
+      REDIS_HOST: redis # service name = hostname inside docker network
+      REDIS_PORT: 6379
+      RATE_LIMIT_STRATEGY: token_bucket
+      RATE_LIMIT_CAPACITY: 10
+      RATE_LIMIT_REFILL_PER_SEC: 1
+    depends_on:
+      redis:
+        condition: service_healthy
+
+volumes:
+  redis-data:
