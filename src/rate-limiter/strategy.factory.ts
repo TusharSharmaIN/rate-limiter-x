@@ -11,10 +11,21 @@ import { SlidingWindowCounterConfig } from './strategies/sliding-window-counter/
 import { SlidingWindowCounterStrategy } from './strategies/sliding-window-counter/sliding-window-counter.strategy';
 import { LeakyBucketConfig } from './strategies/leaky-bucket/leaky-bucket.config';
 import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-strategy';
+import { StatsService } from 'src/observability/stats.service';
+
+export const AVAILABLE_STRATEGIES = [
+  'token_bucket',
+  'fixed_window',
+  'sliding_window_log',
+  'sliding_window_counter',
+  'leaky_bucket',
+] as const;
+
+export type StrategyName = (typeof AVAILABLE_STRATEGIES)[number];
 
 @Injectable()
 export class StrategyFactory {
-  private readonly strategyName: string;
+  private currentStrategyName: StrategyName;
 
   constructor(
     private readonly config: ConfigService,
@@ -23,15 +34,30 @@ export class StrategyFactory {
     private readonly slidingWindowLogStrategy: SlidingWindowLogStrategy,
     private readonly slidingWindowCounterStrategy: SlidingWindowCounterStrategy,
     private readonly leakyBucketStrategy: LeakyBucketStrategy,
+    private readonly statsService: StatsService,
   ) {
-    this.strategyName = this.config.get<string>(
+    this.currentStrategyName = this.config.get<StrategyName>(
       'rateLimiter.strategy',
       'token_bucket',
     );
   }
 
+  getCurrentStrategyName(): StrategyName {
+    return this.currentStrategyName;
+  }
+
+  setStrategy(name: StrategyName): void {
+    if (!AVAILABLE_STRATEGIES.includes(name)) {
+      throw new Error(`Unknown strategy: ${name}`);
+    }
+    this.currentStrategyName = name;
+  }
+
   async checkLimit(key: string): Promise<LimitResult> {
-    switch (this.strategyName) {
+    const strategyName = this.currentStrategyName;
+    let result: LimitResult;
+
+    switch (strategyName) {
       case 'token_bucket': {
         const cfg: TokenBucketConfig = {
           capacity: this.config.get<number>('rateLimiter.capacity', 10),
@@ -40,9 +66,9 @@ export class StrategyFactory {
             1,
           ),
         };
-        return this.tokenBucketStrategy.checkLimit(key, cfg);
+        result = await this.tokenBucketStrategy.checkLimit(key, cfg);
+        break;
       }
-
       case 'fixed_window': {
         const cfg: FixedWindowConfig = {
           capacity: this.config.get<number>('rateLimiter.capacity', 10),
@@ -51,9 +77,9 @@ export class StrategyFactory {
             60,
           ),
         };
-        return this.fixedWindowStrategy.checkLimit(key, cfg);
+        result = await this.fixedWindowStrategy.checkLimit(key, cfg);
+        break;
       }
-
       case 'sliding_window_log': {
         const cfg: SlidingWindowLogConfig = {
           capacity: this.config.get<number>('rateLimiter.capacity', 10),
@@ -62,9 +88,9 @@ export class StrategyFactory {
             60,
           ),
         };
-        return this.slidingWindowLogStrategy.checkLimit(key, cfg);
+        result = await this.slidingWindowLogStrategy.checkLimit(key, cfg);
+        break;
       }
-
       case 'sliding_window_counter': {
         const cfg: SlidingWindowCounterConfig = {
           capacity: this.config.get<number>('rateLimiter.capacity', 10),
@@ -73,10 +99,9 @@ export class StrategyFactory {
             60,
           ),
         };
-
-        return this.slidingWindowCounterStrategy.checkLimit(key, cfg);
+        result = await this.slidingWindowCounterStrategy.checkLimit(key, cfg);
+        break;
       }
-
       case 'leaky_bucket': {
         const cfg: LeakyBucketConfig = {
           capacity: this.config.get<number>('rateLimiter.capacity', 10),
@@ -85,16 +110,16 @@ export class StrategyFactory {
             1,
           ),
         };
-
-        return this.leakyBucketStrategy.checkLimit(key, cfg);
+        result = await this.leakyBucketStrategy.checkLimit(key, cfg);
+        break;
       }
-
       default:
-        throw new Error(`Unknown rate limiter strategy: ${this.strategyName}`);
+        throw new Error(
+          `Unknown rate limiter strategy: ${this.currentStrategyName}`,
+        );
     }
-  }
 
-  getStrategyName(): string {
-    return this.strategyName;
+    this.statsService.record(strategyName, result.allowed);
+    return result;
   }
 }

@@ -7,9 +7,10 @@ import { FixedWindowStrategy } from './strategies/fixed-window/fixed-window.stra
 import { SlidingWindowLogStrategy } from './strategies/sliding-window-log/sliding-window-log.strategy';
 import { SlidingWindowCounterStrategy } from './strategies/sliding-window-counter/sliding-window-counter.strategy';
 import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-strategy';
+import { AdminController } from './admin.controller';
 
 @Module({
-  controllers: [RateLimiterController],
+  controllers: [RateLimiterController, AdminController],
   providers: [
     RateLimiterService,
     StrategyFactory,

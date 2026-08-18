@@ -17,6 +17,11 @@ async function bootstrap() {
     logger: activeLevels as any,
   });
 
+  app.enableCors({
+    origin: '*',
+    methods: 'GET,POST',
+  });
+
   app.connectMicroservice<MicroserviceOptions>({
     transport: Transport.GRPC,
     options: {
