@@ -10,7 +10,7 @@ import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-stra
 import { AdminController } from './admin.controller';
 
 @Module({
-  controllers: [RateLimiterController, AdminController],
+  controllers: [RateLimiterController, AdminController, RateLimiterController],
   providers: [
     RateLimiterService,
     StrategyFactory,
