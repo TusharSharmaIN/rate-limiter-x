@@ -8,9 +8,14 @@ import { SlidingWindowLogStrategy } from './strategies/sliding-window-log/slidin
 import { SlidingWindowCounterStrategy } from './strategies/sliding-window-counter/sliding-window-counter.strategy';
 import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-strategy';
 import { AdminController } from './admin.controller';
+import { RateLimiterHttpController } from './rate-limiter-http.controller';
 
 @Module({
-  controllers: [RateLimiterController, AdminController, RateLimiterController],
+  controllers: [
+    RateLimiterController,
+    AdminController,
+    RateLimiterHttpController,
+  ],
   providers: [
     RateLimiterService,
     StrategyFactory,
