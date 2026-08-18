@@ -14,16 +14,26 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   private healthy = true;
 
   constructor(private config: ConfigService) {
-    this.client = new Redis({
-      host: this.config.get<string>('redis.host'),
-      port: this.config.get<number>('redis.port'),
-      lazyConnect: false,
-      retryStrategy: (times) =>
-        Math.min(
-          times * 200,
-          this.config.get<number>('redis.retryMaxDelayMs', 2000),
-        ),
-    });
+    const redisUrl = this.config.get<string>('redis.url');
+
+    this.client = redisUrl
+      ? new Redis(redisUrl, {
+          tls: {},
+          retryStrategy: (times) =>
+            Math.min(
+              times * 200,
+              this.config.get<number>('redis.retryMaxDelayMs', 2000),
+            ),
+        })
+      : new Redis({
+          host: this.config.get<string>('redis.host'),
+          port: this.config.get<number>('redis.port'),
+          retryStrategy: (times) =>
+            Math.min(
+              times * 200,
+              this.config.get<number>('redis.retryMaxDelayMs', 2000),
+            ),
+        });
 
     this.client.on('error', (err) => {
       this.healthy = false;
