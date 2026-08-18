@@ -12,6 +12,7 @@ import { SlidingWindowCounterStrategy } from './strategies/sliding-window-counte
 import { LeakyBucketConfig } from './strategies/leaky-bucket/leaky-bucket.config';
 import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-strategy';
 import { StatsService } from 'src/observability/stats.service';
+import { RuntimeConfigService } from './runtime-config.service';
 
 export const AVAILABLE_STRATEGIES = [
   'token_bucket',
@@ -29,6 +30,7 @@ export class StrategyFactory {
 
   constructor(
     private readonly config: ConfigService,
+    private readonly runtimeConfig: RuntimeConfigService,
     private readonly tokenBucketStrategy: TokenBucketStrategy,
     private readonly fixedWindowStrategy: FixedWindowStrategy,
     private readonly slidingWindowLogStrategy: SlidingWindowLogStrategy,
@@ -60,8 +62,13 @@ export class StrategyFactory {
     switch (strategyName) {
       case 'token_bucket': {
         const cfg: TokenBucketConfig = {
-          capacity: this.config.get<number>('rateLimiter.capacity', 10),
-          refillRatePerSec: this.config.get<number>(
+          capacity: this.runtimeConfig.get(
+            'capacity',
+            'rateLimiter.capacity',
+            10,
+          ),
+          refillRatePerSec: this.runtimeConfig.get(
+            'refillRatePerSec',
             'rateLimiter.refillRatePerSec',
             1,
           ),
@@ -71,8 +78,13 @@ export class StrategyFactory {
       }
       case 'fixed_window': {
         const cfg: FixedWindowConfig = {
-          capacity: this.config.get<number>('rateLimiter.capacity', 10),
-          windowSizeSec: this.config.get<number>(
+          capacity: this.runtimeConfig.get(
+            'capacity',
+            'rateLimiter.capacity',
+            10,
+          ),
+          windowSizeSec: this.runtimeConfig.get(
+            'windowSizeSec',
             'rateLimiter.windowSizeSec',
             60,
           ),
@@ -82,8 +94,13 @@ export class StrategyFactory {
       }
       case 'sliding_window_log': {
         const cfg: SlidingWindowLogConfig = {
-          capacity: this.config.get<number>('rateLimiter.capacity', 10),
-          windowSizeSec: this.config.get<number>(
+          capacity: this.runtimeConfig.get(
+            'capacity',
+            'rateLimiter.capacity',
+            10,
+          ),
+          windowSizeSec: this.runtimeConfig.get(
+            'windowSizeSec',
             'rateLimiter.windowSizeSec',
             60,
           ),
@@ -93,8 +110,13 @@ export class StrategyFactory {
       }
       case 'sliding_window_counter': {
         const cfg: SlidingWindowCounterConfig = {
-          capacity: this.config.get<number>('rateLimiter.capacity', 10),
-          windowSizeSec: this.config.get<number>(
+          capacity: this.runtimeConfig.get(
+            'capacity',
+            'rateLimiter.capacity',
+            10,
+          ),
+          windowSizeSec: this.runtimeConfig.get(
+            'windowSizeSec',
             'rateLimiter.windowSizeSec',
             60,
           ),
@@ -104,8 +126,13 @@ export class StrategyFactory {
       }
       case 'leaky_bucket': {
         const cfg: LeakyBucketConfig = {
-          capacity: this.config.get<number>('rateLimiter.capacity', 10),
-          leakRatePerSec: this.config.get<number>(
+          capacity: this.runtimeConfig.get(
+            'capacity',
+            'rateLimiter.capacity',
+            10,
+          ),
+          leakRatePerSec: this.runtimeConfig.get(
+            'leakRatePerSec',
             'rateLimiter.leakRatePerSec',
             1,
           ),

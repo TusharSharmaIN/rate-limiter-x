@@ -1,7 +1,9 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { RedisService } from '../redis/redis.service';
 import { FailOpenCounterService } from './fail-open-counter.service';
 
+@ApiTags('observability')
 @Controller('health')
 export class HealthController {
   constructor(
@@ -9,6 +11,7 @@ export class HealthController {
     private readonly failOpenCounter: FailOpenCounterService,
   ) {}
 
+  @ApiOperation({ summary: 'Service + Redis health check' })
   @Get()
   check() {
     const redisHealthy = this.redisService.isHealthy();

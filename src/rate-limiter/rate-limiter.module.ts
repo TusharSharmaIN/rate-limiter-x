@@ -9,15 +9,19 @@ import { SlidingWindowCounterStrategy } from './strategies/sliding-window-counte
 import { LeakyBucketStrategy } from './strategies/leaky-bucket/leaky-bucket-strategy';
 import { AdminController } from './admin.controller';
 import { RateLimiterHttpController } from './rate-limiter-http.controller';
+import { RuntimeConfigService } from './runtime-config.service';
+import { ConfigController } from './config.controller';
 
 @Module({
   controllers: [
     RateLimiterController,
     AdminController,
     RateLimiterHttpController,
+    ConfigController,
   ],
   providers: [
     RateLimiterService,
+    RuntimeConfigService,
     StrategyFactory,
     TokenBucketStrategy,
     FixedWindowStrategy,

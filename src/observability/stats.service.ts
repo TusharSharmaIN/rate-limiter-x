@@ -34,4 +34,10 @@ export class StatsService {
       perStrategy: this.perStrategy,
     };
   }
+
+  resetStats() {
+    this.totalAllowed = 0;
+    this.totalDenied = 0;
+    this.perStrategy = {};
+  }
 }
