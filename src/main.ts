@@ -19,7 +19,10 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: '*',
+    origin: [
+      'https://rate-limiter-dashboard-rouge.vercel.app',
+      'http://localhost:5173',
+    ],
     methods: 'GET,POST',
   });
 
