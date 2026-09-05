@@ -64,10 +64,11 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     keys: string[],
     args: (string | number)[],
   ): Promise<T> {
+    const prefixedKeys = keys.map((k) => `rate-limiter-x:${k}`);
     return this.client.eval(
       script,
-      keys.length,
-      ...keys,
+      prefixedKeys.length,
+      ...prefixedKeys,
       ...args,
     ) as Promise<T>;
   }

@@ -7,7 +7,11 @@ import { ObservabilityModule } from './observability/observability.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [configuration] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [configuration],
+      envFilePath: ['.env.local'], // production values are set directly in the host's env, not a file
+    }),
     RedisModule,
     ObservabilityModule,
     RateLimiterModule,
