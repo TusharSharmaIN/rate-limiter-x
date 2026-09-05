@@ -20,7 +20,7 @@ async function bootstrap() {
 
   app.enableCors({
     origin: [
-      'https://rate-limiter-dashboard-rouge.vercel.app',
+      'https://rate-limiter-x.vercel.app',
       'http://localhost:5173',
     ],
     methods: 'GET,POST',
